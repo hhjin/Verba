@@ -1,4 +1,6 @@
 .env
+.env_azure
+.env_chat2api
 __pycache__
 .DS_Store
 .pytest_cache

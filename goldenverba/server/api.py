@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-
+import webbrowser
 import os
 from pathlib import Path
 
@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from starlette.websockets import WebSocketDisconnect
 from wasabi import msg  # type: ignore[import]
 import time
+import json 
 
 from goldenverba import verba_manager
 from goldenverba.server.types import (
@@ -145,7 +146,7 @@ async def get_status():
         }
         msg.fail(f"Status retrieval failed: {str(e)}")
         return JSONResponse(content=data)
-
+ 
 # Get Configuration
 @app.get("/api/config")
 async def retrieve_config():
@@ -164,36 +165,7 @@ async def retrieve_config():
             },
         )
 
-### WEBSOCKETS
 
-@app.websocket("/ws/generate_stream")
-async def websocket_generate_stream(websocket: WebSocket):
-    await websocket.accept()
-    while True:  # Start a loop to keep the connection alive.
-        try:
-            data = await websocket.receive_text()
-            # Parse and validate the JSON string using Pydantic model
-            payload = GeneratePayload.model_validate_json(data)
-            msg.good(f"Received generate stream call for {payload.query}")
-            full_text = ""
-            async for chunk in manager.generate_stream_answer(
-                [payload.query], [payload.context], payload.conversation
-            ):
-                full_text += chunk["message"]
-                if chunk["finish_reason"] == "stop":
-                    chunk["full_text"] = full_text
-                await websocket.send_json(chunk)
-
-        except WebSocketDisconnect:
-            msg.warn("WebSocket connection closed by client.")
-            break  # Break out of the loop when the client disconnects
-
-        except Exception as e:
-            msg.fail(f"WebSocket Error: {str(e)}")
-            await websocket.send_json(
-                {"message": e, "finish_reason": "stop", "full_text": str(e)}
-            )
-        msg.good("Succesfully streamed answer")
 
 ### POST
 
@@ -282,24 +254,114 @@ async def update_config(payload: ConfigPayload):
     )
 
 # Receive query and return chunks and query answer
+def open_urls_in_browser(url):
+    print('file to open:', f"file:///Users/henryking/Verba/data/test_files/{url}")
+    if(url.startswith('https://')):
+        return webbrowser.open(url)
+    webbrowser.open(f"file:///Users/henryking/Verba/data/test_files/{url}")
+
+
+### WEBSOCKETS generate_stream
+
+@app.websocket("/ws/generate_stream")
+async def websocket_generate_stream(websocket: WebSocket):
+ 
+    await websocket.accept()
+    while True:  # Start a loop to keep the connection alive.
+        try:
+            data = await websocket.receive_text()
+            # Parse and validate the JSON string using Pydantic model
+            payload = GeneratePayload.model_validate_json(data)
+            msg.good(f"######## ######## ######## ######## ########")
+            msg.good(f"######## /ws/generate_stream Received generate stream call for {payload.query}")
+            first_conversation_item = payload.conversation[0] if payload.conversation else None
+            last_three_conversation_items = payload.conversation[-4:] if len(payload.conversation) >= 4 else payload.conversation
+            #msg.info(f"First conversation item: {first_conversation_item}")
+            #msg.info(f"Last three conversation items: {last_three_conversation_items}")
+            newConversations = []
+            if first_conversation_item:
+                newConversations.append(first_conversation_item)
+            newConversations.extend(last_three_conversation_items)
+            msg.info(f"Merged conversation items: {newConversations}")
+
+            full_text = ""
+            async for chunk in manager.generate_stream_answer(
+                [payload.query], [payload.context], newConversations
+            ):
+                full_text += chunk["message"]
+                if chunk["finish_reason"] == "stop":
+                    chunk["full_text"] = full_text
+                await websocket.send_json(chunk)
+
+        except WebSocketDisconnect:
+            msg.warn("WebSocket connection closed by client.")
+            break  # Break out of the loop when the client disconnects
+
+        except Exception as e:
+            msg.fail(f"WebSocket Error: {str(e)}")
+            await websocket.send_json(
+                {"message": e, "finish_reason": "stop", "full_text": str(e)}
+            )
+ 
+        msg.good(f"######## /ws/generate_stream Succesfully streamed answer ： {full_text}")
+
+# Receive query and return chunks and query answer
+@app.post("/api/chat")
+async def query(payload: QueryPayload):
+    msg.good(f"\n\n\n############ Chat API Received query: {payload.query}")
+    start_time = time.time()  # Start timing
+ 
+    # THIS WAS ADDED
+    full_text=''
+    adjusted = GeneratePayload.model_validate_json(json.dumps({
+        "query": payload.query,
+        "context": "context",
+        "conversation": [{"type":"system", "content":"You are a helpful assistant, you always answer in Chinese."}]
+    }))
+    msg.good(f"\n###generator_manager.selected_generator : {manager.generator_manager.selected_generator}")
+    import os
+    msg.good(f"\n###OPENAI_BASE_URL : {os.getenv('OPENAI_BASE_URL', '')}  ###OPENAI_API_KEY : {os.getenv('OPENAI_API_KEY', '')}")
+    async for chunk in manager.generate_stream_answer(
+            [adjusted.query], [], adjusted.conversation
+        ):
+            full_text += chunk["message"]
+            # msg.good(f"answer chunk: {chunk['message']}")
+            if chunk["finish_reason"] == "stop":
+                chunk["full_text"] = full_text
+    msg.good(f"\n### answer full_text: {full_text}")
+    elapsed_time = round(time.time() - start_time, 2)  # Calculate elapsed time
+    msg.good(f"Succesfully processed chat : {payload.query} in {elapsed_time}s")
+    return JSONResponse(
+        content={
+            "error": "",
+            "chunks": [],
+            "context": "context",
+            "took": elapsed_time,
+            "full_text": full_text
+        }
+    )
+
+# Receive query and return chunks  
 @app.post("/api/query")
 async def query(payload: QueryPayload):
-    msg.good(f"Received query: {payload.query}")
+    msg.good(f"\n############ ############ ############\n")
+    msg.good(f"\n############ RAG /api/query Received query: {payload.query}")
     start_time = time.time()  # Start timing
+    retrieved_chunks = []
     try:
         chunks, context = manager.retrieve_chunks([payload.query])
-
-        retrieved_chunks = [
-            {
+        # THIS WAS CHANGED
+        for chunk in chunks:
+           retrieved_chunks.append({
                 "text": chunk.text,
                 "doc_name": chunk.doc_name,
                 "chunk_id": chunk.chunk_id,
                 "doc_uuid": chunk.doc_uuid,
                 "doc_type": chunk.doc_type,
                 "score": chunk.score,
-            }
-            for chunk in chunks
-        ]
+                
+            })
+ 
 
         elapsed_time = round(time.time() - start_time, 2)  # Calculate elapsed time
         msg.good(f"Succesfully processed query: {payload.query} in {elapsed_time}s")
@@ -320,10 +382,13 @@ async def query(payload: QueryPayload):
                 "chunks": retrieved_chunks,
                 "context": context,
                 "took": elapsed_time,
+                
             }
         )
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         msg.warn(f"Query failed: {str(e)}")
         return JSONResponse(
             content={
@@ -333,6 +398,7 @@ async def query(payload: QueryPayload):
                     "error": f"Something went wrong: {str(e)}",
             }
         )
+
 
 # Retrieve auto complete suggestions based on user input
 @app.post("/api/suggestions")

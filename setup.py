@@ -5,11 +5,12 @@ setup(
     version="1.0.2",
     packages=find_packages(),
     python_requires=">=3.10.0",
-    entry_points={
+    entry_points={ 
         "console_scripts": [
             "verba=goldenverba.server.cli:cli",
         ],
     },
+    
     author="Weaviate",
     author_email="edward@weaviate.io",
     description="Welcome to Verba: The Golden RAGtriever, an open-source initiative designed to offer a streamlined, user-friendly interface for Retrieval-Augmented Generation (RAG) applications. In just a few easy steps, dive into your data and make meaningful interactions!",

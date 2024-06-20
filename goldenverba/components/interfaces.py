@@ -164,6 +164,8 @@ class Embedder(VerbaComponent):
         @returns bool - Bool whether the embedding what successful.
         """
         try:
+            from wasabi import msg 
+            print(f"\n####### import_data ",client )
             if self.vectorizer not in VECTORIZERS and self.vectorizer not in EMBEDDINGS:
                 msg.fail(f"Vectorizer of {self.name} not found")
                 return False

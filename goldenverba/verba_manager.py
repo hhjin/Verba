@@ -393,7 +393,18 @@ class VerbaManager:
                 raise EnvironmentError(
                     "Missing environment variables. When using Azure OpenAI, you need to set OPENAI_BASE_URL, AZURE_OPENAI_RESOURCE_NAME, AZURE_OPENAI_EMBEDDING_MODEL and OPENAI_MODEL. Please check documentation."
                 )
+        print(f"\n\n####  OPENAI_API_TYPE :" ,{os.environ.get("OPENAI_API_TYPE", "")})
+        print(f"####  OPENAI_BASE_URL :" ,{os.environ.get("OPENAI_BASE_URL", "")})
+        print(f"####  OPENAI_MODEL :" ,{os.environ.get("OPENAI_MODEL", "")})
+        print(f"####  OPENAI_API_KEY :" ,{os.environ.get("OPENAI_API_KEY", "")})
+        print(f"####  AZURE_OPENAI_RESOURCE_NAME :" ,{os.environ.get("AZURE_OPENAI_RESOURCE_NAME", "")})
+        print(f"####  AZURE_OPENAI_EMBEDDING_MODEL :" ,{os.environ.get("AZURE_OPENAI_EMBEDDING_MODEL", "")})
+        print(f"####  OLLAMA_URL :" ,{os.environ.get("OLLAMA_URL", "")})
+        print(f"####  OLLAMA_MODEL :" ,{os.environ.get("OLLAMA_MODEL", "")})
+        print(f"####  OLLAMA_EMBED_MODEL :" ,{os.environ.get("OLLAMA_EMBED_MODEL", "")})
+        print(f"####  COHERE_API_KEY :" ,{os.environ.get("COHERE_API_KEY", "")})
 
+        print("#### self.environment_variables" ,self.environment_variables)
     def get_schemas(self) -> dict:
         """
         @returns dict - A dictionary with the schema names and their object count.
